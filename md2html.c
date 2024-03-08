@@ -2,36 +2,93 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define size sizeof(char) * 160
+#define size sizeof(char) * 256
 
 /*
 FLAGS
 -> should be a global variable
 int array, flag[n] == 1 if flag is true, for the blockquote, & ordered/unordered lists the flag > 0 when true,
 when flag[n] = k, it means we are k levels nested into the blockquote/ordered/unordered list
-1: paragraph
-2: blockquote
-3: ordered list
-4: unordered list
-5: table
-6: fenced code blocks
-7: task lists
+0: blockquote
+1: ordered list
+2: unordered list
+3: code block
+4: task list
+5: paragraph
 
 INLINE
-
 */
+int flags[6] = {0};
 
-int terminate(int* flag, FILE* target){
-    switch(*flag){
-        case 1:
-            fwrite("</p>\n", sizeof(char) * 5, 1, target);
-            *flag = 0;
-            break;
-        default:
-            break;
+char* parseFlags(char* line){
+    char* prefix = buildPrefix();
+    //check for properties
+    if(strncmp(line, "---\n", 4) == 0){
+        parseProperties();
+    }
+    //check for header
+    else if(strncmp(line, "#", 1) == 0){
+        parseHeader(line);
+    }
+    else if(strncmp(line, ">", 1) == 0){
+        flags[0]++;
+        for(char* point = line; *point == '>'; point++){
+            flags[0]++;
+        }
+    }
+    else if(strncmp(line, "1.", 2) == 0){
+        flags[1]++;
+    }
+    else if(strncmp(line, "- ", 2) == 0){
+        flags[2]++;
+    }
+    else if(strncmp(line, "```", 3) == 0){
+        flags[3] = 1;
+    }
+    else if(strncmp(line, "- [ ] ", 6) == 0){
+        flags[4]++;
+    }
+    else{
+        flags[5] = 1;
+        parseParagraph();
     }
 
-    return 0;
+    return prefix;
+}
+
+char* buildPrefix(){
+    char* prefix = "";
+
+    int tabs = flags[0] + flags[1] + flags[2] + flags[4];
+
+    for(int i = 0; i < tabs; i++){
+        *prefix = *updatePrefix(prefix, "\t");
+    }
+
+    return prefix;
+}
+
+char* updatePrefix(char* left, char* right){
+    int sizeL = sizeof(left) / sizeof(char);
+    int sizeR = sizeof(right) / sizeof(char);
+    char* newPrefix = malloc(sizeof(char) * (sizeL + sizeR));
+
+    strncat(newPrefix, left, sizeL);
+    strncat(newPrefix, right, sizeR);
+
+    return newPrefix;
+}
+
+void parseProperties(){
+    return;
+}
+
+void parseHeader(char* line){
+    return;
+}
+
+void writeLine(){
+    return;
 }
 
 int main(int argc, char *argv[]){
