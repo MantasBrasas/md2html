@@ -18,77 +18,172 @@ when flag[n] = k, it means we are k levels nested into the blockquote/ordered/un
 
 INLINE
 */
-int flags[6] = {0};
+int flags[6] = {0, 0, 0, 0, 0, 0};
 
-char* parseFlags(char* line){
-    char* prefix = buildPrefix();
-    //check for properties
-    if(strncmp(line, "---\n", 4) == 0){
-        parseProperties();
-    }
-    //check for header
-    else if(strncmp(line, "#", 1) == 0){
-        parseHeader(line);
-    }
-    else if(strncmp(line, ">", 1) == 0){
-        flags[0]++;
-        for(char* point = line; *point == '>'; point++){
-            flags[0]++;
+void parseProperties(FILE* fileIn, FILE* fileOut){
+    char* buffer = malloc(size);
+    char* point = "";
+
+    fwrite("<ul>\n", 5, 1, fileOut);
+    
+    while(fgets(buffer, size, fileIn) != NULL){
+        if(strncmp(buffer, "---\n", 4) == 0){
+            fwrite("</ul>\n", 6, 1, fileOut);
+            return;
         }
+        fwrite("\t<li>", 5, 1, fileOut);
+        for(point = buffer; *point != '\n' & *point != '\0'; point++){
+            fwrite(point, 1, 1, fileOut);
+        }
+        fwrite("</li>\n", 6, 1, fileOut);
     }
-    else if(strncmp(line, "1.", 2) == 0){
-        flags[1]++;
-    }
-    else if(strncmp(line, "- ", 2) == 0){
-        flags[2]++;
-    }
-    else if(strncmp(line, "```", 3) == 0){
-        flags[3] = 1;
-    }
-    else if(strncmp(line, "- [ ] ", 6) == 0){
-        flags[4]++;
-    }
-    else{
-        flags[5] = 1;
-        parseParagraph();
-    }
-
-    return prefix;
+    return;
 }
 
-char* buildPrefix(){
-    char* prefix = "";
+void parseHeader(char* line, FILE* fileOut){
+    char* point = "";
+    int headerSize = 0;
 
-    int tabs = flags[0] + flags[1] + flags[2] + flags[4];
-
-    for(int i = 0; i < tabs; i++){
-        *prefix = *updatePrefix(prefix, "\t");
+    for(point = line; *point == '#'; point++){
+        headerSize++;
     }
 
-    return prefix;
+    if(headerSize > 6){
+        fprintf(stderr, "invalid header length");
+    }
+
+    char* heading = malloc(6);
+    sprintf(heading, "<h%d>", headerSize);
+    fwrite(heading, 4, 1, fileOut);
+
+    for(point = line + headerSize + 1; *point != '\0' && *point != '\n'; point++){
+        fwrite(point, 1, 1, fileOut);
+    }
+    
+    sprintf(heading, "</h%d>\n", headerSize);
+    fwrite(heading, 6, 1, fileOut);
+
+    return;
 }
 
-char* updatePrefix(char* left, char* right){
-    int sizeL = sizeof(left) / sizeof(char);
-    int sizeR = sizeof(right) / sizeof(char);
-    char* newPrefix = malloc(sizeof(char) * (sizeL + sizeR));
+void writeLine(char* prefix, int prefixLength, char* line, FILE* fileOut){
+    char* point = malloc(1);
+    fwrite(prefix, prefixLength, 1, fileOut);
+    for(point = line; *point != '\0'; point++){
+        if(*point == '\n'){
+            fwrite("\n", 1, 1, fileOut);
+            return;
+        }
+        fwrite(point, 1, 1, fileOut);
+    }
+    return;
+}
+
+int updatePrefix(char* prefix, char* left, char* right){
+    int sizeL = sizeof(left);
+    int sizeR = sizeof(right);
+    char* newPrefix = malloc(sizeL + sizeR);
 
     strncat(newPrefix, left, sizeL);
     strncat(newPrefix, right, sizeR);
 
-    return newPrefix;
+    *prefix = *newPrefix;
+
+    return sizeL + sizeR;
 }
 
-void parseProperties(){
-    return;
+int buildPrefix(char* prefix){
+    int prefixLength = 0;
+    int tabs = flags[0] + (flags[1] - 1) + flags[2] + flags[4];
+
+    for(int i = 0; i < tabs; i++){
+        prefixLength = updatePrefix(prefix, prefix, "\t");
+    }
+
+    return prefixLength;
 }
 
-void parseHeader(char* line){
-    return;
+int updateFlags(char* prefix, int index, int value){
+    int prefixLength = 0;
+    flags[index] = value;
+    prefixLength = buildPrefix(prefix);
+    return prefixLength;
 }
 
-void writeLine(){
-    return;
+int parseFlags(char* prefix, char* line, FILE* fileIn, FILE* fileOut){
+    int prefixLength = 0;
+    //ordered list handling
+    int len = sprintf(NULL, "%d. ", flags[1] + 1);
+    char* olCompare = malloc(len + 1);
+    sprintf(olCompare, "%d. ", flags[1] + 1);
+
+    //check for header
+    if(strncmp(line, "#", 1) == 0){
+        parseHeader(line, fileOut);
+        return prefixLength;
+    }
+    
+    else{
+        //CHECK FOR BLOCKQUOTE
+        if(strncmp(line, ">", 1) == 0){
+            int quoteCount = 0;
+            for(char* point = line; *point == '>'; point++){
+                quoteCount++;
+            }
+            if(quoteCount > flags[0]){
+                for(int i = 0; i < quoteCount - flags[0]; i++){
+                    prefixLength = updateFlags(prefix, 0, flags[0] + 1);
+                    writeLine(prefix, prefixLength, "<div>\n", fileOut);
+                }
+            }
+        }
+        else{
+            prefixLength = updateFlags(prefix, 0, 0);
+        }
+        
+        //CHECK FOR ORDERED LIST
+        if(strncmp(line, olCompare, len) == 0){
+            prefixLength = updateFlags(prefix, 1, flags[1] + 1);
+        }
+        else{
+            prefixLength = updateFlags(prefix, 1, 0);
+        }
+
+        if(strncmp(line, "- ", 2) == 0){
+            prefixLength = updateFlags(prefix, 2, flags[2] + 1);
+        }
+        else{
+            prefixLength = updateFlags(prefix, 2, 0);
+        }
+
+        if(strncmp(line, "```", 3) == 0){
+            prefixLength = updateFlags(prefix, 3, flags[3] + 1);
+        }
+        
+        if(strncmp(line, "- [ ] ", 6) == 0){
+            prefixLength = updateFlags(prefix, 4, flags[4] + 1);
+        }
+        
+        if(prefixLength == 0){
+            if(flags[5] == 0){
+                prefixLength = updateFlags(prefix, 5, 1);
+                fwrite("<p>\n\t", 4, 1, fileOut);
+            }
+            else{
+                fwrite("\t", 1, 1, fileOut);
+            }
+            
+            for(char* point = line; *point != '\0'; point++){
+                if(*point == '\n'){
+                    fwrite("\n</p>\n", 5, 1, fileOut);
+                    
+                    break;
+                }
+                fwrite(point, 1, 1, fileOut);
+            }
+        }
+    }
+    return prefixLength;
 }
 
 int main(int argc, char *argv[]){
@@ -106,96 +201,24 @@ int main(int argc, char *argv[]){
     char *buffer = malloc(size);
     char *point = malloc(sizeof(char));
 
-    int len;
-    int *pFlag;
-
-    *pFlag = 0;
-
+    //PARSE PROPERTIES
     fgets(buffer, size, md);
-
-    //CHECK FILE FOR `---`:
     if(strncmp(buffer, "---\n", 4) == 0){
-
-        //WRITE <ul> TO START UNORDERED LIST
-        fwrite("<ul>\n", sizeof(char) * 5, 1, html);
-
-        //LOOP THROUGH PROPERTIES AND WRITE THEM AS <li> ELEMENTS
-        while(fgets(buffer, size, md)){
-            //IF WE ARE AT THE END OF PROPERTIES
-            if(strncmp(buffer, "---\n", 4) == 0){
-                //CLOSE UNORDERED LIST & EXIT LOOP
-                fwrite("</ul>\n", sizeof(char) * 6, 1, html);
-                break;
-            }
-            //WRITE LINE AS <li> ITEM
-            fwrite("\t<li>", sizeof(char) * 5, 1, html);
-            for(point = buffer; *point != '\n'; point++){
-                fwrite(point, sizeof(char), 1, html);
-            }
-            fwrite("</li>\n", sizeof(char) * 6, 1, html);
-        }
+        parseProperties(md, html);
     }
 
-    //MAIN LOOP
     while(fgets(buffer, size, md) != NULL){
-
-        //HEADING CHECK
-        int hCount = 0;
-        for(point = buffer; *point != '\0'; point++){
-            if(*point == '#'){
-                hCount++;
-            }
-            else{
-                break;
+        char* prefix = "";
+        //CLEAR LEADING SPACES/INDENTS IF NOT IN CODEBLOCK OR LIST
+        if(flags[3] == 0 && flags[2] == 0 && flags[1] == 0){
+            point = buffer;
+            while((*point == ' ') || (*point == '\t')){
+                buffer++;
+                point++;
             }
         }
 
-        //CODEBLOCKS
-        if(strncmp(buffer, "```", 3) == 0){
-            terminate(pFlag, html);
-
-            if(*pFlag == 0){
-                fwrite("<pre>\n", sizeof(char) * 6, 1, html);
-                *pFlag = 2;
-            }
-            else if(*pFlag == 2){
-                fwrite("</pre>\n", sizeof(char) * 7, 1, html);
-                *pFlag = 0;
-            }
-
-            fgets(buffer, size, md);
-        }
-
-
-        if(hCount > 0){
-            //TERMINATE TAG
-            terminate(pFlag, html);
-
-            //BEGIN HEADING
-            char *str = malloc(7);
-            snprintf(str, 5, "<h%d>", hCount);
-            fwrite(str, 4, 1, html);
-
-            for(point = buffer + hCount + 1; *point != '\n'; point++){
-                fwrite(point, sizeof(char), 1, html);
-            }
-
-            snprintf(str, 7, "</h%d>\n", hCount);
-            fwrite(str, 6, 1, html);
-            free(str);
-        }
-        else{
-            if(*pFlag == 0){
-                fwrite("<p>\n\t", sizeof(char) * 5, 1, html);
-                *pFlag = 1;
-            }
-            else if(*pFlag == 1){
-                fwrite("\t", sizeof(char), 1, html);
-            }
-            for(point = buffer; *point != '\0'; point++){
-                fwrite(point, sizeof(char), 1, html);
-            }
-        }
+        parseFlags(prefix, buffer, md, html);
     }
 
     fclose(md);
