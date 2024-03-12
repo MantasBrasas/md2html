@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define HEADER 0
 #define BLOCKQUOTE 1
@@ -8,12 +9,26 @@
 #define UNORDERED_LIST 3
 #define CODEBLOCK 4
 #define TASK_LIST 5
+#define INDENT 6
 
 FILE* md;
 FILE* html;
 
-int flagsDelta[6] = {0};
-int flagsCurrent[6] = {0};
+int fD[7] = {0};
+int fC[7] = {0};
+
+#define NEST_DEPTH 10
+int olNest[NEST_DEPTH] = {0};
+
+/*
+void modifyNest(int* nest, int newSize){
+    int* tempNest = malloc(sizeof(nest) / sizeof(int));
+    for(int i = 0; i < (sizeof(nest) / sizeof(int)); i++){
+        tempNest[i] = nest[i];
+    }
+
+}
+*/
 
 void shortenLine(char* line, int n){
     if(strlen(line) <= n || line == NULL){
@@ -26,76 +41,162 @@ void shortenLine(char* line, int n){
 
 void parse(char* line){
     //DO NOT ATTEMPT TO PARSE CODE WRITTEN IN THE .MD FILE!
-    if(flagsDelta[CODEBLOCK] != 0){
+    if(fD[CODEBLOCK] != 0){
         return;
     }
-    //printf("begin parse on:\n%s", line);
+
+    //handle weird nested lists
+    int indentCount = 0;
+    if(fC[CODEBLOCK] == 0){
+        if(strncmp(line, "\t", 1) == 0){
+            for(char* ch = line; *ch == '\t'; ch++){
+                indentCount += 1;
+            }
+        }
+
+        if(indentCount < fC[INDENT]){
+            for(int i = indentCount; i <= fC[INDENT]; i++){
+                olNest[i] *= -1;
+            }
+        }
+        
+        fC[INDENT] = indentCount;
+    }
+
+    //shortenLine(line, indentCount);
+    
+    
     if(strncmp(line, "#", 1) == 0){
-        //printf("header %d found\n", flagsDelta[0]++);
-        flagsDelta[0] += 1;
-        shortenLine(line, 1);
-        parse(line);
+        for(char* ch = line; *ch == '#'; ch++){
+         fD[0] += 1;
+        }
+        shortenLine(line, fD[0]);
         return;
     }
     if(strncmp(line, "```", 3) == 0){
-        shortenLine(line, 3)
-        if(flagsCurrent[CODEBLOCK] == 1){
-            flagsDelta[CODEBLOCK] = -1;
+        shortenLine(line, 3);
+        if(fC[CODEBLOCK] == 1){
+         fD[CODEBLOCK] = -1;
             return;
         }
-        flagsDelta[CODEBLOCK] = 1;
+     fD[CODEBLOCK] = 1;
         return;
     }
+
+    int len = sprintf(NULL, "%d. ", abs(olNest[fC[INDENT]]) + 1);
+    char* ol = malloc(len + 1);
+    sprintf(ol, "%d. ", abs(olNest[fC[INDENT]]) + 1);
+
+    if(strncmp(line + fC[INDENT], ol, strlen(ol)) == 0){
+        if(olNest[fC[INDENT]] < 0){
+            olNest[fC[INDENT]] *= -1;
+        }
+        olNest[fC[INDENT]]++;
+
+        if(olNest[fC[INDENT]] == 1){
+         fD[ORDERED_LIST] = 1;
+        }
+
+        shortenLine(line + fC[INDENT], 3);
+        fC[ORDERED_LIST] = 1;
+    }
+    else if(fC[INDENT] == 0){
+        olNest[0] *= -1;
+    }
+
+    /*
+    printf("indentCount: %d, olNest = [", indentCount);
+    for(int i = 0; i < NEST_DEPTH - 1; i++){
+        printf("%d\t", olNest[i]);
+    }
+    printf("%d]\n", olNest[NEST_DEPTH]);
+    */
+
+    return;
 }
 
-void writeTags(char* line){
+bool writeTags(char* line){
     if(line == NULL){
-        return;
+        return true;
     }
     //check flags!
-    if(flagsDelta[HEADER] != 0){
+    if(fD[HEADER] != 0){
         char* header = malloc(6);
-        if(flagsDelta[HEADER] > 0){
-            sprintf(header, "<h%d>\n\t", flagsDelta[HEADER]);
-            fwrite(header, 6, 1, html);\
+        if(fD[HEADER] > 0){
+            sprintf(header, "<h%d>", fD[HEADER]);
+            fwrite(header, 4, 1, html);\
             shortenLine(line, 1);
 
-            flagsCurrent[HEADER] = flagsDelta[HEADER];
-            flagsDelta[HEADER] = -1;
+            fC[HEADER] = fD[HEADER];
+            fD[HEADER] = -1;
+
+            return false;
         }
-        else if(flagsCurrent[HEADER] != 0){
-            sprintf(header, "</h%d>\n", flagsCurrent[HEADER]);
+        else if(fC[HEADER] != 0){
+            sprintf(header, "</h%d>\n", fC[HEADER]);
             fwrite(header, 6, 1, html);
 
-            flagsDelta[HEADER] = 0;
-            flagsCurrent[HEADER] = 0;
+            fD[HEADER] = 0;
+            fC[HEADER] = 0;
+
+            return true;
         }
-        free(header);
     }
     else
-    if(flagsDelta[CODEBLOCK] != 0){
-        if(flagsDelta[CODEBLOCK] == 1){
+    if(fD[CODEBLOCK] != 0){
+        if(fD[CODEBLOCK] == 1){
             char* codeblock = malloc(17 + strlen(line));
             sprintf(codeblock, "<pre class=\"lang_%s", line);
             fwrite(codeblock, 16 + strlen(line), 1, html);
-            fwrite("\">", 2, 1, html);
+            fwrite("\">\n", 3, 1, html);
+            shortenLine(line, 3);
 
-            flagsCurrent[CODEBLOCK] = 1;
+            fC[CODEBLOCK] = 1;
         }
         else
-        if(flagsCurrent[CODEBLOCK] == 1){
+        if(fD[CODEBLOCK] == -1){
             fwrite("</pre>\n", 7, 1, html);
 
-            flagsCurrent[CODEBLOCK] = 0;
+            fC[CODEBLOCK] = 0;
         }
-        flagsDelta[CODEBLOCK] = 0;
+        fD[CODEBLOCK] = 0;
+        return true;
     }
+    
+    else
+    if(olNest[0] != 0){
+        if(fC[ORDERED_LIST] == -1){
+            fwrite("</li>\n", 6, 1, html);
+            fC[ORDERED_LIST] = 0;
+        }
+        
+        if(fD[ORDERED_LIST] == 1){
+            fwrite("<ol>\n", 5, 1, html);
+         fD[ORDERED_LIST] = 0;
+        }
+
+        if(fC[ORDERED_LIST] == 1){
+            fwrite("<li>", 4, 1, html);
+            fC[ORDERED_LIST] = -1;
+        }
+
+        for(int i = 0; i < NEST_DEPTH; i++){
+            if(olNest[i] < 0){
+                fwrite("</ol>\n", 6, 1, html);
+                olNest[i] = 0;
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    return true;
 }
 
-void writeText(char* line){
+void writeText(char* line, bool endline){
     for(char* point = line; *point != '\0'; point++){
         if(*point == '\n'){
-            fwrite("\n", 1, 1, html);
+            fwrite("\n", endline, 1, html);
             return;
         }
         fwrite(point, 1, 1, html);
@@ -110,15 +211,30 @@ int main(int argc, char* argv[]){
     char* line = malloc(256);
     char* ch = "";
 
+    //write title
+
+    //read properties
+    fgets(line, 256, md);
+    if(strncmp(line, "---\n", 4) == 0){
+        fwrite("<ul class=\"properties\">\n", 24, 1, html);
+        while(fgets(line, 256, md) != NULL){
+            if(strncmp(line, "---\n", 4) == 0){
+                fwrite("</ul>\n", 6, 1, html);
+                break;
+            }
+            fwrite("<li>", 4, 1, html);
+            writeText(line, false);
+            fwrite("</li>\n", 6, 1, html);
+        }
+    }
+
+    //write properties
+    bool endline;
     while(fgets(line, 256, md) != NULL){
         //parse
         parse(line);
-        //open tags
-        writeTags(line);
-        //write text
-        writeText(line);
-        //close tags
-        writeTags(line);
+        //open tags & write text
+        writeText(line, writeTags(line));
     }
 
     fclose(md);
