@@ -39,6 +39,17 @@ void shortenLine(char* line, int n){
     return;
 }
 
+void writeText(char* line, bool endline){
+    for(char* point = line; *point != '\0'; point++){
+        if(*point == '\n'){
+            fwrite("\n", endline, 1, html);
+            return;
+        }
+        fwrite(point, 1, 1, html);
+    }
+    return;
+}
+
 void parse(char* line){
     //DO NOT ATTEMPT TO PARSE CODE WRITTEN IN THE .MD FILE!
     if(fD[CODEBLOCK] != 0){
@@ -59,13 +70,9 @@ void parse(char* line){
                 olNest[i] *= -1;
             }
         }
-        
-        fC[INDENT] = indentCount;
     }
+    fC[INDENT] = indentCount;
 
-    //shortenLine(line, indentCount);
-    
-    
     if(strncmp(line, "#", 1) == 0){
         for(char* ch = line; *ch == '#'; ch++){
          fD[0] += 1;
@@ -104,45 +111,22 @@ void parse(char* line){
         olNest[0] *= -1;
     }
 
-    /*
-    printf("indentCount: %d, olNest = [", indentCount);
+    
+    printf("ol: %s, indentCount: %d, olNest = [", ol, indentCount);
     for(int i = 0; i < NEST_DEPTH - 1; i++){
         printf("%d\t", olNest[i]);
     }
     printf("%d]\n", olNest[NEST_DEPTH]);
-    */
+    
 
     return;
 }
 
-bool writeTags(char* line){
+bool writeBlockTags(char* line){
     if(line == NULL){
         return true;
     }
     //check flags!
-    if(fD[HEADER] != 0){
-        char* header = malloc(6);
-        if(fD[HEADER] > 0){
-            sprintf(header, "<h%d>", fD[HEADER]);
-            fwrite(header, 4, 1, html);\
-            shortenLine(line, 1);
-
-            fC[HEADER] = fD[HEADER];
-            fD[HEADER] = -1;
-
-            return false;
-        }
-        else if(fC[HEADER] != 0){
-            sprintf(header, "</h%d>\n", fC[HEADER]);
-            fwrite(header, 6, 1, html);
-
-            fD[HEADER] = 0;
-            fC[HEADER] = 0;
-
-            return true;
-        }
-    }
-    else
     if(fD[CODEBLOCK] != 0){
         if(fD[CODEBLOCK] == 1){
             char* codeblock = malloc(17 + strlen(line));
@@ -164,27 +148,18 @@ bool writeTags(char* line){
     }
     
     else
-    if(olNest[0] != 0){
-        if(fC[ORDERED_LIST] == -1){
-            fwrite("</li>\n", 6, 1, html);
-            fC[ORDERED_LIST] = 0;
+    if(olNest[0] != 0){  
+        for(int i = 0; i < fC[INDENT]; i++){
+            fwrite("\t", 1, 1, html);
         }
-        
         if(fD[ORDERED_LIST] == 1){
             fwrite("<ol>\n", 5, 1, html);
-         fD[ORDERED_LIST] = 0;
+        fD[ORDERED_LIST] = 0;
         }
-
-        if(fC[ORDERED_LIST] == 1){
-            fwrite("<li>", 4, 1, html);
-            fC[ORDERED_LIST] = -1;
-        }
-
         for(int i = 0; i < NEST_DEPTH; i++){
             if(olNest[i] < 0){
                 fwrite("</ol>\n", 6, 1, html);
                 olNest[i] = 0;
-                return false;
             }
         }
         return false;
@@ -193,15 +168,38 @@ bool writeTags(char* line){
     return true;
 }
 
-void writeText(char* line, bool endline){
-    for(char* point = line; *point != '\0'; point++){
-        if(*point == '\n'){
-            fwrite("\n", endline, 1, html);
-            return;
-        }
-        fwrite(point, 1, 1, html);
+void writeLine(char* line, bool endline){
+    if(fD[HEADER] > 0){
+        char* header = malloc(4);
+        sprintf(header, "<h%d>", fD[HEADER]);
+        fwrite(header, 4, 1, html);\
+        shortenLine(line, 1);
+        free(header);
+        endline = false;
     }
-    return;
+    else 
+    if(olNest[0] > 0){
+        for(int i = 0; i < fC[INDENT] + 1; i++){
+            fwrite("\t", 1, 1, html);
+        }
+        shortenLine(line, fC[INDENT]);
+        fwrite("<li>", 4, 1, html);
+        endline = false;
+    }
+
+    writeText(line, endline);
+
+    if(fD[HEADER] > 0){
+        char* header = malloc(6);
+        sprintf(header, "</h%d>\n", fD[HEADER]);
+        fwrite(header, 6, 1, html);
+        fD[HEADER] = 0;
+        free(header);
+    }
+    else
+    if(olNest[0] > 0){
+        fwrite("</li>\n", 6, 1, html);
+    }
 }
 
 int main(int argc, char* argv[]){
@@ -234,7 +232,7 @@ int main(int argc, char* argv[]){
         //parse
         parse(line);
         //open tags & write text
-        writeText(line, writeTags(line));
+        writeLine(line, writeBlockTags(line));
     }
 
     fclose(md);
