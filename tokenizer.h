@@ -9,24 +9,20 @@
 typedef enum {
     START = 0,
     HEADING,
+    OLIST,
+    INDENT,
     TEXT,
     ENDLINE,
     END,
 } TokenType;
+
+char* translate[7] = {"START", "HEADING", "OLIST", "INDENT", "TEXT", "ENDLINE", "END"};
 
 typedef struct tk{
     int tokenType;
     char* value;
     struct tk* next;
 } Token;
-
-//maybe can get rid of this its only used once
-Token* createToken(int type, char* val){
-    Token* token = malloc(sizeof(Token));
-    token->value = val;
-    token->next = NULL;
-    return token;
-}
 
 void addToken(Token* head, int type, char* val){
     Token* current = head;
@@ -48,7 +44,22 @@ void addToken(Token* head, int type, char* val){
     
     current->next->next = NULL;
 
+    //free(val);
     return;
+}
+
+int countChars(char* str, char search, char* ch){
+    int count = 0;
+    while(*ch == search){
+        count++;
+        ch++;
+    }
+
+    free(str);
+    str = malloc(5);
+    sprintf(str, "%d", count);
+
+    return count;
 }
 
 Token* tokens;
@@ -63,7 +74,7 @@ void tokenize(char* line){
         tokens->next = NULL;
     }
 
-    char* ch;
+    char* ch = malloc(1);
     for(ch = line; *ch != '\0'; ch++){
         if(*ch == '\n'){
             addToken(tokens, ENDLINE, NULL);
@@ -72,20 +83,43 @@ void tokenize(char* line){
 
         int counter = 0;
 
-        if(*ch == ' '){
+        //INDENT
+        if(*ch == '\t'){
+            char* indentCount = malloc(1);
+            countChars(indentCount, '\t', ch);
+            addToken(tokens, INDENT, indentCount);
             continue;
         }
-        if(*ch == '#'){
-            while(*ch == '#'){
-                counter++;
-                ch++;
+        if(*ch == ' '){
+            
+            char* spaceCount = malloc(1);
+            int spaces = countChars(spaceCount, ' ', ch);
+            if(spaces % 4 == 0){
+                sprintf(spaceCount, "%d", spaces / 4);
+                addToken(tokens, INDENT, spaceCount);
             }
-
-            int len = sprintf(NULL, "%d", counter);
-            char* headingCount = malloc(len + 1);
-            sprintf(headingCount, "%d", counter);
-            addToken(tokens, HEADING, headingCount);
+            ch += spaces - 1;
             continue;
+        }
+        //HEADING
+        if(*ch == '#'){
+            char* headingCount = malloc(1);
+            countChars(headingCount, '#', ch);
+            addToken(tokens, HEADING, headingCount);
+            ch++;
+            continue;
+        }
+        //ORDERED LIST
+        if(isdigit(*ch)){
+            if(*(ch + 1) == '.' && *(ch + 2) == ' '){
+                char* buffer = malloc(2);
+                buffer[0] = *ch;
+                buffer[1] = '\0';
+
+                addToken(tokens, OLIST, buffer);
+                ch += 2;
+                continue;
+            }
         }
 
         //search for everything else BEFORE THIS
@@ -116,10 +150,11 @@ void returnTokens(){
     if(tokens == NULL){
         return;
     }
+    printf("\n");
     while(temp->next != NULL){
-        printf("Token: %d, Value: %s\n", temp->tokenType, temp->value);
+        printf("Token: %s\tValue: %s\n", translate[temp->tokenType], temp->value);
         temp = temp->next;
     }
-    printf("Token: %d, Value: %s\n", temp->tokenType, temp->value);
+    printf("Token: %s\tValue: %s\n", translate[temp->tokenType], temp->value);
     return;
 }

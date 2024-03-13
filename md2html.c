@@ -19,15 +19,14 @@ FILE* md;
 FILE* html;
 
 int main(int argc, char* argv[]){
-    md = fopen("sample.md", "r");
-    html = fopen("sample.html", "w");
+    md = fopen("sampleTwo.md", "r");
+    html = fopen("sampleTwo.html", "w");
 
     char* line = malloc(SIZE);
 
     while(fgets(line, SIZE, md) != NULL){
         tokenize(line);
-        
-        //test
+
         for(char* ch = line; *ch != '\0'; ch++){
             if(ch == "\n"){
                 fwrite("\n", 1, 1, html);
