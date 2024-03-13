@@ -3,51 +3,20 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include "tokenizer.h"
+
 #define SIZE 256
 
-enum TokenType {
-    HEADING,
-    TEXT,
-};
-
-typedef struct {
-    int tokenType;
-    bool optional;
-    char* value;
-    Token next;
-} Token;
-
-Token* createToken(int type, char* val){
-    Token* token = malloc(sizeof(Token));
-    if(val != NULL){
-        token->optional = true;
-        token->value = val;
-    }
-    else{
-        token->optional = false;
-    }
-    token->value = val;
-
-    token.next = NULL;
+char* intToString(int value){
+    int len = sprintf(NULL, "%d", value);
+    //does not end the string, could be bad?
+    char* out = malloc(len);
+    sprintf(out, "%d", value);
+    return out;
 }
 
 FILE* md;
 FILE* html;
-
-Token tokenize(char* line){
-    Token tokens;
-
-    char* ch;
-    for(ch = line; ch != "\0"; ch++){
-        if(ch == "#"){
-            int headingCount = 0;
-            while(ch == "#"){
-                ch++;
-                headingCount++;
-            }
-        }
-    }
-}
 
 int main(int argc, char* argv[]){
     md = fopen("sample.md", "r");
@@ -56,6 +25,9 @@ int main(int argc, char* argv[]){
     char* line = malloc(SIZE);
 
     while(fgets(line, SIZE, md) != NULL){
+        tokenize(line);
+        
+        //test
         for(char* ch = line; *ch != '\0'; ch++){
             if(ch == "\n"){
                 fwrite("\n", 1, 1, html);
@@ -65,6 +37,11 @@ int main(int argc, char* argv[]){
         }
     }
 
+    addToken(tokens, END, NULL);
+
+    returnTokens();
+
+    free(tokens);
     fclose(html);
     fclose(md);
     return 0;
