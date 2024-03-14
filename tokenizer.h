@@ -10,9 +10,16 @@ typedef enum {
     START = 0,
     PROPERTIES,
     HEADING,
+    LIST,
     OLIST,
+    TASKLIST,
+    BLOCKQUOTE,
     CODEBLOCK_FENCED,
     CODEBLOCK_INLINE,
+    BOLD,
+    ITALIC,
+    STRIKETHROUGH,
+    HIGHLIGHT,
     INDENT,
     LINEBREAK,
     TEXT,
@@ -20,12 +27,19 @@ typedef enum {
     END,
 } TokenType;
 
-char* translate[11] = {"START",
+char* translate[18] = {"START",
                       "PROPERTIES", 
-                      "HEADING", 
+                      "HEADING",
+                      "LIST", 
                       "OLIST",
+                      "TASKLIST",
+                      "BLOCKQUOTE",
                       "CODEBLOCK_FENCED",
                       "CODEBLOCK_INLINE",
+                      "BOLD",
+                      "ITALIC",
+                      "STRIKETHROUGH",
+                      "HIGHLIGHT",
                       "INDENT",
                       "LINEBREAK", 
                       "TEXT", 
@@ -78,9 +92,8 @@ int countChars(char* str, char search, char* ch){
         count++;
         ch++;
     }
-
-    free(str);
-    str = malloc(5);
+    //free(str);
+    //str = malloc(5);
     sprintf(str, "%d", count);
 
     return count;
@@ -106,26 +119,81 @@ void tokenize(char* line, int lineCount){
 
         int counter = 0;
 
-        //PROPERTIES & LINEBREAKS
+        //BACKSLASH
+
+
+        //STRIKETHROUGH
+        if(*ch == '~' && *(ch + 1) == '~'){
+            addToken(STRIKETHROUGH, NULL);
+            ch++;
+            continue;
+        }
+
+        //HIGHLIGHT
+        if(*ch == '=' && *(ch + 1) == '='){
+            addToken(HIGHLIGHT, NULL);
+            ch++;
+            continue;
+        }
+
+
+        //BOLD & ITALICS
+        if(*ch == '_' || *ch == '*'){
+            char* countUnderscore = malloc(1);
+            int underscoreCount = countChars(countUnderscore, '_', ch);
+            int starCount = countChars(countUnderscore, '*', ch);
+            //ITALICS
+            if(underscoreCount == 1 || starCount == 1){
+                addToken(ITALIC, NULL);
+            }
+            else
+            //BOLD
+            if(underscoreCount == 2 || starCount == 2){
+                addToken(BOLD, NULL);
+                ch++;
+            }
+            continue;
+        }
+
+        //PROPERTIES & LINEBREAKS & UNORDERED/TASK LISTS
         if(*ch == '-'){
-            char* dashCount = malloc(1);
-            counter = countChars(dashCount, '-', ch);
-            printf("%d\n", counter);
-            if(counter >= 3 && *(ch + counter) == '\n'){
-                if(lineCount == 0){
-                    props = true;
-                    addToken(PROPERTIES, NULL);
-                }
-                else
-                if(props){
-                    addToken(PROPERTIES, NULL);
-                    props = false;
+            //UNORDERED LISTS
+            if(*(ch + 1) == ' '){
+                if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
+                    if(*(ch + 3) != ' '){
+                        addToken(TASKLIST, "1");
+                    }
+                    else{
+                        addToken(TASKLIST, "0");
+                    }
+                    ch += 5;
                 }
                 else{
-                    addToken(LINEBREAK, NULL);
+                    addToken(LIST, NULL);
+                    ch ++;
                 }
-                ch += counter;
                 continue;
+            }
+            //PROPERTIES & LINEBREAKS
+            else{
+                char* dashCount = malloc(1);
+                counter = countChars(dashCount, '-', ch);
+                if(counter >= 3 && *(ch + counter) == '\n'){
+                    if(lineCount == 0){
+                        props = true;
+                        addToken(PROPERTIES, NULL);
+                    }
+                    else
+                    if(props){
+                        addToken(PROPERTIES, NULL);
+                        props = false;
+                    }
+                    else{
+                        addToken(LINEBREAK, NULL);
+                    }
+                    ch += counter;
+                    continue;
+                }
             }
         }
 
@@ -144,6 +212,7 @@ void tokenize(char* line, int lineCount){
             }
             continue;
         }
+
         //INDENT
         if(*ch == '\t'){
             char* indentCount = malloc(1);
@@ -161,14 +230,23 @@ void tokenize(char* line, int lineCount){
                 continue;
             }
         }
+
         //BLOCKQUOTE
+        if(*ch == '>'){
+            char* quoteCount = malloc(1);
+            counter = countChars(quoteCount, '>', ch);
+            addToken(BLOCKQUOTE, quoteCount);
+            ch += counter - 1;
+            continue;
+        }
+
         //HEADING
         if(*ch == '#'){
             char* headingCount = malloc(1);
-            countChars(headingCount, '#', ch);
-            if(*(ch + 1) == ' '){
+            counter = countChars(headingCount, '#', ch);
+            if(*(ch + counter) == ' '){
                 addToken(HEADING, headingCount);
-                ch++;
+                ch += counter;
                 continue;
             }
         }
@@ -185,8 +263,9 @@ void tokenize(char* line, int lineCount){
             }
         }
 
-       buffer[bufferSize] = *ch;
-       bufferSize++;
+        //TEXT
+        buffer[bufferSize] = *ch;
+        bufferSize++;
     }
     if(*ch == '\0'){
         addToken(ENDLINE, NULL);

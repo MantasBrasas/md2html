@@ -56,8 +56,8 @@ void returnTokens(){
 int lineCount = 0;
 
 int main(int argc, char* argv[]){
-    md = fopen("sampleTwo.md", "r");
-    html = fopen("sampleTwo.html", "w");
+    md = fopen("sampleThree.md", "r");
+    html = fopen("sampleThree.html", "w");
 
     char* line = malloc(SIZE);
 
