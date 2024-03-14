@@ -6,17 +6,28 @@
 
 #define SIZE 256
 
+
 typedef enum {
     START = 0,
+    PROPERTIES,
     HEADING,
     OLIST,
     INDENT,
+    LINEBREAK,
     TEXT,
     ENDLINE,
     END,
 } TokenType;
 
-char* translate[7] = {"START", "HEADING", "OLIST", "INDENT", "TEXT", "ENDLINE", "END"};
+char* translate[9] = {"START",
+                      "PROPERTIES", 
+                      "HEADING", 
+                      "OLIST", 
+                      "INDENT",
+                      "LINEBREAK", 
+                      "TEXT", 
+                      "ENDLINE", 
+                      "END"};
 
 typedef struct tk{
     int tokenType;
@@ -63,8 +74,9 @@ int countChars(char* str, char search, char* ch){
 }
 
 Token* tokens;
+bool props = false;
 
-void tokenize(char* line){
+void tokenize(char* line, int lineCount){
     int index = 0;
 
     if(tokens == NULL){
@@ -82,6 +94,26 @@ void tokenize(char* line){
         }
 
         int counter = 0;
+
+        //PROPERTIES
+        if(*ch == '-'){
+            char* dashCount = malloc(1);
+            counter = countChars(dashCount, '-', ch);
+            if(counter == 3){
+                if(lineCount == 0){
+                    props = true;
+                    addToken(tokens, PROPERTIES, NULL);
+                }
+                else
+                if(props){
+                    addToken(tokens, PROPERTIES, NULL);
+                    props = false;
+                }
+                else{
+                    addToken(tokens, LINEBREAK, NULL);
+                }
+            }
+        }
 
         //INDENT
         if(*ch == '\t'){
@@ -142,19 +174,5 @@ void tokenize(char* line){
         addToken(tokens, ENDLINE, NULL);
     }
 
-    return;
-}
-
-void returnTokens(){
-    Token* temp = tokens;
-    if(tokens == NULL){
-        return;
-    }
-    printf("\n");
-    while(temp->next != NULL){
-        printf("Token: %s\tValue: %s\n", translate[temp->tokenType], temp->value);
-        temp = temp->next;
-    }
-    printf("Token: %s\tValue: %s\n", translate[temp->tokenType], temp->value);
     return;
 }
