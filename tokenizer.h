@@ -6,12 +6,13 @@
 
 #define SIZE 256
 
-
 typedef enum {
     START = 0,
     PROPERTIES,
     HEADING,
     OLIST,
+    CODEBLOCK_FENCED,
+    CODEBLOCK_INLINE,
     INDENT,
     LINEBREAK,
     TEXT,
@@ -19,10 +20,12 @@ typedef enum {
     END,
 } TokenType;
 
-char* translate[9] = {"START",
+char* translate[11] = {"START",
                       "PROPERTIES", 
                       "HEADING", 
-                      "OLIST", 
+                      "OLIST",
+                      "CODEBLOCK_FENCED",
+                      "CODEBLOCK_INLINE",
                       "INDENT",
                       "LINEBREAK", 
                       "TEXT", 
@@ -35,8 +38,18 @@ typedef struct tk{
     struct tk* next;
 } Token;
 
-void addToken(Token* head, int type, char* val){
-    Token* current = head;
+Token* tokens;
+int bufferSize;
+char* buffer = "";
+bool props = false;
+
+void addToken(int type, char* val){
+    if(bufferSize != 0){
+        buffer[bufferSize] = '\0';
+        bufferSize = 0;
+        addToken(TEXT, buffer);
+    }
+    Token* current = tokens;
     while(current->next != NULL){
         current = current->next;
     }
@@ -73,12 +86,7 @@ int countChars(char* str, char search, char* ch){
     return count;
 }
 
-Token* tokens;
-bool props = false;
-
 void tokenize(char* line, int lineCount){
-    int index = 0;
-
     if(tokens == NULL){
         tokens = malloc(sizeof(Token));
         tokens->tokenType = 0;
@@ -86,60 +94,83 @@ void tokenize(char* line, int lineCount){
         tokens->next = NULL;
     }
 
+    buffer = malloc(SIZE + 1);
+    bufferSize = 0;
+
     char* ch = malloc(1);
     for(ch = line; *ch != '\0'; ch++){
-        if(*ch == '\n'){
-            addToken(tokens, ENDLINE, NULL);
+        if(*ch == '\n' || *ch == '\r'){
+            addToken(ENDLINE, NULL);
             break;
         }
 
         int counter = 0;
 
-        //PROPERTIES
+        //PROPERTIES & LINEBREAKS
         if(*ch == '-'){
             char* dashCount = malloc(1);
             counter = countChars(dashCount, '-', ch);
-            if(counter == 3){
+            printf("%d\n", counter);
+            if(counter >= 3 && *(ch + counter) == '\n'){
                 if(lineCount == 0){
                     props = true;
-                    addToken(tokens, PROPERTIES, NULL);
+                    addToken(PROPERTIES, NULL);
                 }
                 else
                 if(props){
-                    addToken(tokens, PROPERTIES, NULL);
+                    addToken(PROPERTIES, NULL);
                     props = false;
                 }
                 else{
-                    addToken(tokens, LINEBREAK, NULL);
+                    addToken(LINEBREAK, NULL);
                 }
+                ch += counter;
+                continue;
             }
         }
 
+        //FENCED & INLINE CODEBLOCKS
+        //these need to grab rest of text as a single token, up to codeblock close
+        if(*ch == '`'){
+            char* backtickCount = malloc(1);
+            counter = countChars(backtickCount, '`', ch);
+            if(counter == 3){
+                addToken(CODEBLOCK_FENCED, NULL);
+                ch += 2;
+            }
+            else
+            if(counter == 1){
+                addToken(CODEBLOCK_INLINE, NULL);
+            }
+            continue;
+        }
         //INDENT
         if(*ch == '\t'){
             char* indentCount = malloc(1);
             countChars(indentCount, '\t', ch);
-            addToken(tokens, INDENT, indentCount);
+            addToken(INDENT, indentCount);
             continue;
         }
         if(*ch == ' '){
-            
             char* spaceCount = malloc(1);
             int spaces = countChars(spaceCount, ' ', ch);
             if(spaces % 4 == 0){
                 sprintf(spaceCount, "%d", spaces / 4);
-                addToken(tokens, INDENT, spaceCount);
+                addToken(INDENT, spaceCount);
+                ch += spaces - 1;
+                continue;
             }
-            ch += spaces - 1;
-            continue;
         }
+        //BLOCKQUOTE
         //HEADING
         if(*ch == '#'){
             char* headingCount = malloc(1);
             countChars(headingCount, '#', ch);
-            addToken(tokens, HEADING, headingCount);
-            ch++;
-            continue;
+            if(*(ch + 1) == ' '){
+                addToken(HEADING, headingCount);
+                ch++;
+                continue;
+            }
         }
         //ORDERED LIST
         if(isdigit(*ch)){
@@ -148,30 +179,17 @@ void tokenize(char* line, int lineCount){
                 buffer[0] = *ch;
                 buffer[1] = '\0';
 
-                addToken(tokens, OLIST, buffer);
+                addToken(OLIST, buffer);
                 ch += 2;
                 continue;
             }
         }
 
-        //search for everything else BEFORE THIS
-        if(isalnum(*ch)){
-            char* buffer = malloc(SIZE);
-
-            while(isalnum(*ch) || *ch == ' '){
-                buffer[counter] = *ch;
-                ch++;
-                counter++;
-            }
-            buffer[counter] = '\0';
-            ch--;
-            addToken(tokens, TEXT, buffer);
-            continue;
-        }
-        
+       buffer[bufferSize] = *ch;
+       bufferSize++;
     }
     if(*ch == '\0'){
-        addToken(tokens, ENDLINE, NULL);
+        addToken(ENDLINE, NULL);
     }
 
     return;

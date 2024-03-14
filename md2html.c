@@ -26,7 +26,7 @@ void writeToken(Token* t){
     fwrite("Token:\t", 7, 1, html);
     fwrite(type, strlen(type), 1, html);
 
-    for(int i = 0; i < (12 - strlen(type)); i++){
+    for(int i = 0; i < (20 - strlen(type)); i++){
         fwrite(" ", 1, 1, html);
     }
 
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
         lineCount++;
     }
 
-    addToken(tokens, END, NULL);
+    addToken(END, NULL);
 
     returnTokens();
 
