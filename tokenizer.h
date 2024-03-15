@@ -122,6 +122,58 @@ void tokenize(char* line, int lineCount){
         //BACKSLASH
 
 
+        //HORIZONTAL RULE!
+        if(bufferSize == 0){
+            int index = 0;
+            if(*ch == '*' || *ch == ' '){
+                while(*(ch + index) == '*' || *(ch + index) == ' '){
+                    if(*(ch + index) == '*'){
+                        counter++;
+                    }
+                    index++;
+                }
+            }
+            else
+            if(*ch == '_' || *ch == ' '){
+                while(*(ch + index) == '_' || *(ch + index) == ' '){
+                    if(*(ch + index) == '_'){
+                        counter++;
+                    }
+                    index++;
+                }
+            }
+            else
+            if(*ch == '-' || *ch == ' '){
+                while(*(ch + index) == '-' || *(ch + index) == ' '){
+                    if(*(ch + index) == '-'){
+                        counter++;
+                    }
+                    index++;
+                }
+                if(counter == index && counter == 3){
+                    if(lineCount == 0){
+                        props = true;
+                        addToken(PROPERTIES, NULL);
+                        ch += 3;
+                        continue;
+                    }
+                    else
+                    if(props){
+                        props = false;
+                        addToken(PROPERTIES, NULL);
+                        ch += 3;
+                        continue;
+                    }
+                }
+            }
+            if(counter >= 3){
+                addToken(LINEBREAK, NULL);
+                ch += index;
+                continue;
+            }
+        }
+
+
         //STRIKETHROUGH
         if(*ch == '~' && *(ch + 1) == '~'){
             addToken(STRIKETHROUGH, NULL);
@@ -155,9 +207,8 @@ void tokenize(char* line, int lineCount){
             continue;
         }
 
-        //PROPERTIES & LINEBREAKS & UNORDERED/TASK LISTS
+        //UNORDERED/TASK LISTS
         if(*ch == '-'){
-            //UNORDERED LISTS
             if(*(ch + 1) == ' '){
                 if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
                     if(*(ch + 3) != ' '){
@@ -174,41 +225,29 @@ void tokenize(char* line, int lineCount){
                 }
                 continue;
             }
-            //PROPERTIES & LINEBREAKS
-            else{
-                char* dashCount = malloc(1);
-                counter = countChars(dashCount, '-', ch);
-                if(counter >= 3 && *(ch + counter) == '\n'){
-                    if(lineCount == 0){
-                        props = true;
-                        addToken(PROPERTIES, NULL);
-                    }
-                    else
-                    if(props){
-                        addToken(PROPERTIES, NULL);
-                        props = false;
-                    }
-                    else{
-                        addToken(LINEBREAK, NULL);
-                    }
-                    ch += counter;
-                    continue;
-                }
-            }
         }
 
         //FENCED & INLINE CODEBLOCKS
-        //these need to grab rest of text as a single token, up to codeblock close
         if(*ch == '`'){
             char* backtickCount = malloc(1);
             counter = countChars(backtickCount, '`', ch);
-            if(counter == 3){
+            if(counter >= 3){
                 addToken(CODEBLOCK_FENCED, NULL);
                 ch += 2;
             }
             else
-            if(counter == 1){
+            if(counter < 3){
                 addToken(CODEBLOCK_INLINE, NULL);
+                ch += counter - 1;
+                
+            }
+            while(*ch != '`'){
+                buffer[bufferSize] = *ch;
+                ch++;
+                bufferSize++;
+            }
+            if(strlen(buffer) > 0){
+                buffer[bufferSize] = '\0';
             }
             continue;
         }
