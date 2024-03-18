@@ -20,6 +20,8 @@ typedef enum {
     ITALIC,
     STRIKETHROUGH,
     HIGHLIGHT,
+    FOOTNOTE,
+    FOOTNOTE_INLINE,
     INDENT,
     LINEBREAK,
     TEXT,
@@ -27,7 +29,7 @@ typedef enum {
     END,
 } TokenType;
 
-char* translate[18] = {"START",
+char* translate[20] = {"START",
                       "PROPERTIES", 
                       "HEADING",
                       "LIST", 
@@ -40,6 +42,8 @@ char* translate[18] = {"START",
                       "ITALIC",
                       "STRIKETHROUGH",
                       "HIGHLIGHT",
+                      "FOOTNOTE",
+                      "FOOTNOTE_INLINE",
                       "INDENT",
                       "LINEBREAK", 
                       "TEXT", 
@@ -54,11 +58,14 @@ typedef struct tk{
 
 Token* tokens;
 int bufferSize;
+int footnoteCount = 1;
+int footnoteClosed = -1;
+int footnoteInline = 1;
 char* buffer = "";
 bool props = false;
 
 void addToken(int type, char* val){
-    if(bufferSize != 0){
+    if(bufferSize != 0 && type != TEXT){
         buffer[bufferSize] = '\0';
         bufferSize = 0;
         addToken(TEXT, buffer);
@@ -86,14 +93,20 @@ void addToken(int type, char* val){
     return;
 }
 
+char* intToStr(int i){
+    int len = sprintf(NULL, "%d", i);
+    char* str = malloc(len + 1);
+    sprintf(str, "%d", i);
+    str[len] = '\0';
+    return str;
+}
+
 int countChars(char* str, char search, char* ch){
     int count = 0;
     while(*ch == search){
         count++;
         ch++;
     }
-    //free(str);
-    //str = malloc(5);
     sprintf(str, "%d", count);
 
     return count;
@@ -121,6 +134,44 @@ void tokenize(char* line, int lineCount){
 
         //BACKSLASH
 
+
+        //FOOTNOTES
+        if(*ch == '['){
+            if(*(ch + 1) == '^'){
+                while(*(ch + counter + 2) != ']'){
+                    counter++;
+                }
+                if(*(ch + counter + 3) == ':'){
+                    addToken(FOOTNOTE, intToStr(footnoteClosed));
+                    footnoteClosed--;
+                    ch += counter + 3;
+                    continue;
+                }
+                else
+                {
+                    addToken(FOOTNOTE, intToStr(footnoteCount));
+                    footnoteCount++;
+                    ch += counter + 2;
+                    continue;
+                }
+            }   
+        }
+
+        //INLINE FOOTNOTE
+        if(*ch == '^'){
+            if(*(ch + 1) == '['){
+                addToken(FOOTNOTE_INLINE, NULL);
+                ch += 2;
+                while(*ch != ']'){
+                    buffer[bufferSize] = *ch;
+                    ch++;
+                    bufferSize++;
+                }
+                addToken(FOOTNOTE_INLINE, NULL);
+                continue;
+            }
+        }
+        
 
         //HORIZONTAL RULE!
         if(bufferSize == 0){
