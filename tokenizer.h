@@ -22,6 +22,7 @@ typedef enum {
     HIGHLIGHT,
     FOOTNOTE,
     FOOTNOTE_INLINE,
+    MEDIA,
     INDENT,
     LINEBREAK,
     TEXT,
@@ -29,7 +30,7 @@ typedef enum {
     END,
 } TokenType;
 
-char* translate[20] = {"START",
+char* translate[21] = {"START",
                       "PROPERTIES", 
                       "HEADING",
                       "LIST", 
@@ -44,6 +45,7 @@ char* translate[20] = {"START",
                       "HIGHLIGHT",
                       "FOOTNOTE",
                       "FOOTNOTE_INLINE",
+                      "MEDIA",
                       "INDENT",
                       "LINEBREAK", 
                       "TEXT", 
@@ -132,10 +134,15 @@ void tokenize(char* line, int lineCount){
 
         int counter = 0;
 
-        //BACKSLASH
+        //BACKSLASH (CHARACTER ESCAPE)
+        if(*ch == '\\'){
+            buffer[bufferSize] = *(ch + 1);
+            ch++;
+            bufferSize++;
+            continue;
+        }
 
-
-        //FOOTNOTES
+        //FOOTNOTES & LINKS
         if(*ch == '['){
             if(*(ch + 1) == '^'){
                 while(*(ch + counter + 2) != ']'){
@@ -154,7 +161,31 @@ void tokenize(char* line, int lineCount){
                     ch += counter + 2;
                     continue;
                 }
-            }   
+            }
+            addToken(MEDIA, NULL);
+            ch++;
+            while(*ch != ']'){
+                buffer[bufferSize] = *ch;
+                ch++;
+                bufferSize++;
+            }
+            ch++;
+            addToken(MEDIA, NULL);
+            if(*ch == '('){
+                ch++;
+                while(*ch != ')'){
+                    buffer[bufferSize] = *ch;
+                    ch++;
+                    bufferSize++;
+                }
+                addToken(MEDIA, NULL);
+                ch++;
+                continue;
+            }
+            else{
+                //some error with the link goes here
+                printf("error!");
+            }
         }
 
         //INLINE FOOTNOTE
