@@ -5,6 +5,7 @@
 #include <ctype.h>
 
 #define SIZE 1024
+#define TYPES 21
 
 typedef enum {
     START = 0,
@@ -30,27 +31,27 @@ typedef enum {
     END,
 } TokenType;
 
-char* translate[21] = {"START",
-                      "PROPERTIES", 
-                      "HEADING",
-                      "LIST", 
-                      "OLIST",
-                      "TASKLIST",
-                      "BLOCKQUOTE",
-                      "CODEBLOCK_FENCED",
-                      "CODEBLOCK_INLINE",
-                      "BOLD",
-                      "ITALIC",
-                      "STRIKETHROUGH",
-                      "HIGHLIGHT",
-                      "FOOTNOTE",
-                      "FOOTNOTE_INLINE",
-                      "MEDIA",
-                      "INDENT",
-                      "LINEBREAK", 
-                      "TEXT", 
-                      "ENDLINE", 
-                      "END"};
+char* translate[TYPES] = {"START",
+                          "PROPERTIES", 
+                          "HEADING",
+                          "LIST", 
+                          "OLIST",
+                          "TASKLIST",
+                          "BLOCKQUOTE",
+                          "CODEBLOCK_FENCED",
+                          "CODEBLOCK_INLINE",
+                          "BOLD",
+                          "ITALIC",
+                          "STRIKETHROUGH",
+                          "HIGHLIGHT",
+                          "FOOTNOTE",
+                          "FOOTNOTE_INLINE",
+                          "MEDIA",
+                          "INDENT",
+                          "LINEBREAK", 
+                          "TEXT", 
+                          "ENDLINE", 
+                          "END"};
 
 typedef struct tk{
     int tokenType;
@@ -66,7 +67,15 @@ int footnoteCount = 1;
 int footnoteClosed = -1;
 int footnoteInline = 1;
 char* buffer = "";
-bool props = false;
+
+Token* refs[TYPES];
+bool flags[TYPES] = {false};
+
+bool left(){
+    for(int i = 0; i < TYPES; i++){
+
+    }
+}
 
 Token* addToken(int type, char* val){
     Token* token = malloc(sizeof(Token));
@@ -74,11 +83,18 @@ Token* addToken(int type, char* val){
     token->tokenType = type;
 
     if(type == TEXT){
-        token->value = malloc(bufferSize);
-        token->value = buffer;
+        if(val == NULL){
+            buffer[bufferSize] = '\0';
+            token->value = malloc(bufferSize);
+            token->value = buffer;
 
-        bufferSize = 0;
-        buffer = malloc(SIZE);
+            bufferSize = 0;
+            buffer = malloc(SIZE);
+        }
+        else{
+            token->value = malloc(sizeof(val));
+            token->value = val;
+        }
     }
     else
     if(val == NULL){
@@ -92,6 +108,27 @@ Token* addToken(int type, char* val){
     token->left = NULL;
 
     return token;
+}
+
+void inlineToken(int type){
+    if(left() && bufferSize > 0){
+        currentToken->left = addToken(TEXT, NULL);
+    }
+    else if(bufferSize > 0){
+        currentToken->right = addToken(TEXT, NULL);
+    }
+    
+    if(flags[type]){
+        currentToken = refs[type];
+        type = false;
+    }
+    else{
+        flags[type] = true;
+        refs[type] = currentToken;
+
+        currentToken->right = addToken(type, NULL);
+        currentToken = currentToken->right;
+    }
 }
 
 char* intToStr(int i){
@@ -120,11 +157,8 @@ void tokenize(char* line, int lineCount){
         tokens->value = NULL;
         tokens->right = NULL;
         tokens->left = NULL;
-    }
 
-    currentToken = tokens;
-    while(currentToken->right != NULL){
-        currentToken = currentToken->right;
+        currentToken = tokens;
     }
 
     buffer = malloc(SIZE);
@@ -142,6 +176,13 @@ void tokenize(char* line, int lineCount){
 
         //ENDLINES
         if(*ch == '\n' || *ch == '\r'){
+            if(left()){
+                currentToken->left = addToken(TEXT, NULL);
+                currentToken = currentToken->left;
+                break;
+            }
+            currentToken->right = addToken(TEXT, NULL);
+            currentToken = currentToken->right;
             break;
         }
 
@@ -239,89 +280,80 @@ void tokenize(char* line, int lineCount){
         
 
         //HORIZONTAL RULE & PROPERTIES
-        // if(bufferSize == 0){
-        //     int index = 0;
-        //     if(*ch == '*' || *ch == ' '){
-        //         while(*(ch + index) == '*' || *(ch + index) == ' '){
-        //             if(*(ch + index) == '*'){
-        //                 counter++;
-        //             }
-        //             index++;
-        //         }
-        //     }
-        //     else
-        //     if(*ch == '_' || *ch == ' '){
-        //         while(*(ch + index) == '_' || *(ch + index) == ' '){
-        //             if(*(ch + index) == '_'){
-        //                 counter++;
-        //             }
-        //             index++;
-        //         }
-        //     }
-        //     else
-        //     if(*ch == '-' || *ch == ' '){
-        //         while(*(ch + index) == '-' || *(ch + index) == ' '){
-        //             if(*(ch + index) == '-'){
-        //                 counter++;
-        //             }
-        //             index++;
-        //         }
-        //         if(counter == index && counter == 3){
-        //             if(lineCount == 0){
-        //                 props = true;
-        //                 addToken(PROPERTIES, NULL);
-        //                 ch += 3;
-        //                 continue;
-        //             }
-        //             else
-        //             if(props){
-        //                 props = false;
-        //                 addToken(PROPERTIES, NULL);
-        //                 ch += 3;
-        //                 continue;
-        //             }
-        //         }
-        //     }
-        //     if(counter >= 3){
-        //         addToken(LINEBREAK, NULL);
-        //         ch += index;
-        //         continue;
-        //     }
-        // }
+        if(bufferSize == 0){
+            int index = 0;
+            if(*ch == '*' || *ch == ' '){
+                while(*(ch + index) == '*' || *(ch + index) == ' '){
+                    if(*(ch + index) == '*'){
+                        counter++;
+                    }
+                    index++;
+                }
+            }
+            else
+            if(*ch == '_' || *ch == ' '){
+                while(*(ch + index) == '_' || *(ch + index) == ' '){
+                    if(*(ch + index) == '_'){
+                        counter++;
+                    }
+                    index++;
+                }
+            }
+            else
+            if(*ch == '-' || *ch == ' '){
+                while(*(ch + index) == '-' || *(ch + index) == ' '){
+                    if(*(ch + index) == '-'){
+                        counter++;
+                    }
+                    index++;
+                }
+                if(counter == index && counter == 3){
+                    inlineToken(PROPERTIES);
+                    ch += 3;
+                    continue;
+                }
+            }
+            if(counter >= 3){
+                currentToken->right = addToken(LINEBREAK, NULL);
+                currentToken = currentToken->right;
+                ch += index;
+                continue;
+            }
+        }
 
 
         //STRIKETHROUGH
-        // if(*ch == '~' && *(ch + 1) == '~'){
-        //     addToken(STRIKETHROUGH, NULL);
-        //     ch++;
-        //     continue;
-        // }
+        if(*ch == '~' && *(ch + 1) == '~'){
+            inlineToken(STRIKETHROUGH);
+            ch++;
+            continue;
+        }
 
         //HIGHLIGHT
-        // if(*ch == '=' && *(ch + 1) == '='){
-        //     addToken(HIGHLIGHT, NULL);
-        //     ch++;
-        //     continue;
-        // }
+        if(*ch == '=' && *(ch + 1) == '='){
+            inlineToken(HIGHLIGHT);
+            ch++;
+            continue;
+        }
 
 
         //BOLD & ITALICS
-        // if(*ch == '_' || *ch == '*'){
-        //     char* countUnderscore = malloc(1);
-        //     int underscoreCount = countChars(countUnderscore, '_', ch);
-        //     int starCount = countChars(countUnderscore, '*', ch);
-        //     //ITALICS
-        //     if(underscoreCount == 1 || starCount == 1){
-        //         addToken(ITALIC, NULL);
-        //     }
-        //     else
-        //     //BOLD
-        //     if(underscoreCount == 2 || starCount == 2){
-        //         addToken(BOLD, NULL);
-        //         ch++;
-        //     }
-        //     continue;
-        // }
+        if(*ch == '_' || *ch == '*'){
+            char* countUnderscore = malloc(1);
+            int underscoreCount = countChars(countUnderscore, '_', ch);
+            int starCount = countChars(countUnderscore, '*', ch);
+            //ITALICS
+            if(underscoreCount == 1 || starCount == 1){
+                addToken(ITALIC, NULL);
+            }
+            else
+            //BOLD
+            if(underscoreCount == 2 || starCount == 2){
+                addToken(BOLD, NULL);
+                ch++;
+            }
+            continue;
+        }
 
         //UNORDERED/TASK LISTS
         // if(*ch == '-'){
