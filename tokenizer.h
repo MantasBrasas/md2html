@@ -73,8 +73,11 @@ bool flags[TYPES] = {false};
 
 bool left(){
     for(int i = 0; i < TYPES; i++){
-
+        if(flags[i] == true){
+            return true;
+        }
     }
+    return false;
 }
 
 Token* addToken(int type, char* val){
@@ -111,24 +114,26 @@ Token* addToken(int type, char* val){
 }
 
 void inlineToken(int type){
-    if(left() && bufferSize > 0){
+    if(flags[type] && bufferSize > 0){
         currentToken->left = addToken(TEXT, NULL);
     }
     else if(bufferSize > 0){
         currentToken->right = addToken(TEXT, NULL);
+        currentToken = currentToken->right;
     }
     
     if(flags[type]){
         currentToken = refs[type];
-        type = false;
+        flags[type] = false;
     }
     else{
-        flags[type] = true;
-        refs[type] = currentToken;
-
         currentToken->right = addToken(type, NULL);
         currentToken = currentToken->right;
+
+        flags[type] = true;
+        refs[type] = currentToken;
     }
+    return;
 }
 
 char* intToStr(int i){
@@ -307,7 +312,7 @@ void tokenize(char* line, int lineCount){
                     }
                     index++;
                 }
-                if(counter == index && counter == 3){
+                if(counter == index && counter == 3 && (lineCount == 1 || flags[PROPERTIES] == true)){
                     inlineToken(PROPERTIES);
                     ch += 3;
                     continue;
