@@ -114,8 +114,9 @@ Token* addToken(int type, char* val){
 }
 
 void inlineToken(int type){
-    if(flags[type] && bufferSize > 0){
+    if(left() && bufferSize > 0){
         currentToken->left = addToken(TEXT, NULL);
+        currentToken = currentToken->left;
     }
     else if(bufferSize > 0){
         currentToken->right = addToken(TEXT, NULL);
@@ -127,8 +128,8 @@ void inlineToken(int type){
         flags[type] = false;
     }
     else{
-        currentToken->right = addToken(type, NULL);
-        currentToken = currentToken->right;
+        currentToken->left = addToken(type, NULL);
+        currentToken = currentToken->left;
 
         flags[type] = true;
         refs[type] = currentToken;
@@ -171,17 +172,21 @@ void tokenize(char* line, int lineCount){
 
     char* ch = malloc(1);
     for(ch = line; *ch != '\0'; ch++){
-        //TEXT
-        /*
-        if(bufferSize > 0){
-            currentToken->left = addToken(TEXT, NULL);
-            continue;
-        }
-        */
-
         //ENDLINES
         if(*ch == '\n' || *ch == '\r'){
+            if(bufferSize == 0){
+                break;
+            }
+            if(flags[TASKLIST]){
+                flags[TASKLIST] = false;
+                currentToken = refs[TASKLIST];
+
+                currentToken->right = addToken(TEXT, NULL);
+                currentToken = currentToken->right;
+                break;
+            }
             if(left()){
+                //flags[TASKLIST] = false;
                 currentToken->left = addToken(TEXT, NULL);
                 currentToken = currentToken->left;
                 break;
@@ -264,6 +269,7 @@ void tokenize(char* line, int lineCount){
         if(*ch == '^'){
             if(*(ch + 1) == '['){
                 currentToken->left = addToken(TEXT, NULL);
+                currentToken = currentToken->left;
                 currentToken->right = addToken(FOOTNOTE_INLINE, NULL);
                 currentToken = currentToken->right;
 
@@ -279,6 +285,7 @@ void tokenize(char* line, int lineCount){
                 }
 
                 currentToken->left = addToken(TEXT, NULL);
+                currentToken = currentToken->left;
                 continue;
             }
         }
@@ -349,36 +356,44 @@ void tokenize(char* line, int lineCount){
             int starCount = countChars(countUnderscore, '*', ch);
             //ITALICS
             if(underscoreCount == 1 || starCount == 1){
-                addToken(ITALIC, NULL);
+                //addToken(ITALIC, NULL);
+                inlineToken(ITALIC);
             }
             else
             //BOLD
             if(underscoreCount == 2 || starCount == 2){
-                addToken(BOLD, NULL);
+                //addToken(BOLD, NULL);
+                inlineToken(BOLD);
                 ch++;
             }
             continue;
         }
 
         //UNORDERED/TASK LISTS
-        // if(*ch == '-'){
-        //     if(*(ch + 1) == ' '){
-        //         if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
-        //             if(*(ch + 3) != ' '){
-        //                 addToken(TASKLIST, "1");
-        //             }
-        //             else{
-        //                 addToken(TASKLIST, "0");
-        //             }
-        //             ch += 5;
-        //         }
-        //         else{
-        //             addToken(LIST, NULL);
-        //             ch ++;
-        //         }
-        //         continue;
-        //     }
-        // }
+        if(*ch == '-'){
+            if(*(ch + 1) == ' '){
+                if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
+                    char* val = "1";
+                    if(*(ch + 3) != ' '){
+                        val = "0";
+                    }
+
+                    currentToken->right = addToken(TASKLIST, val);
+                    currentToken = currentToken->right;
+
+                    flags[TASKLIST] = true;
+                    refs[TASKLIST] = currentToken;
+
+                    ch += 5;
+                }
+                else{
+                    // currentToken->right = addToken(LIST, NULL);
+                    // currentToken = currentToken->right;
+                    // ch ++;
+                }
+                continue;
+            }
+        }
 
         //FENCED & INLINE CODEBLOCKS
         // if(*ch == '`'){
