@@ -5,8 +5,6 @@
 
 #include "tokenizer.h"
 
-#define SIZE 256
-
 char* intToString(int value){
     int len = sprintf(NULL, "%d", value);
     //does not end the string, could be bad?
@@ -16,48 +14,69 @@ char* intToString(int value){
 }
 
 FILE* md;
-FILE* html;
+FILE* out;
 
 void writeToken(Token* t){
-    char* type = malloc(10);
+    char* type = malloc(strlen(translate[t->tokenType]));
     type = translate[t->tokenType];
     char* val = t->value;
 
-    fwrite("Token:\t", 7, 1, html);
-    fwrite(type, strlen(type), 1, html);
+    fwrite("Token:\t", 7, 1, out);
+    fwrite(type, strlen(type), 1, out);
 
     for(int i = 0; i < (20 - strlen(type)); i++){
-        fwrite(" ", 1, 1, html);
+        fwrite(" ", 1, 1, out);
     }
 
-    fwrite("Value:\t", 7, 1, html);
-    fwrite(val, strlen(val), 1, html);
+    fwrite("Value:\t", 7, 1, out);
+    // if(val != NULL && strlen(val) > 0){
+    //     char* cPoint = val;
+    //     int max = strlen(val);
+    //     if(12 < strlen(val)){
+    //         max = 12;
+    //     }
+    //     for(int i = 0; i < max; i++){
+    //         fwrite(cPoint + i, 1, 1, out);
+    //     }
+    //     if(12 < strlen(val)){
+    //         fwrite("...", 3, 1, out);
+    //     } 
+    // }
+    if(val != NULL){
+        fwrite(val, strlen(val), 1, out);
+    }
+    else{
+        fwrite(" ", 1, 1, out);
+    }
 
-    free(type);
-    free(val);
-    return;
+    if(t->left != NULL){
+        fwrite("\nLEFT:  ", 8, 1, out);
+        writeToken(t->left);
+    }
+    if(t->right != NULL){
+        fwrite("\nRIGHT: ", 8, 1, out);
+        writeToken(t->right);
+    }
+
+    if(t->left == NULL && t->right == NULL){
+        fwrite("\nEND\n", 5, 1, out);
+    }   
 }
 
 void returnTokens(){
-    Token* temp = tokens;
     if(tokens == NULL){
         return;
     }
-    printf("\n");
-    while(temp->next != NULL){
-        writeToken(temp);
-        fwrite("\n", 1, 1, html);
-        temp = temp->next;
-    }
-    writeToken(temp);
+
+    writeToken(tokens);
     return;
 }
 
-int lineCount = 0;
+int lineCount = 1;
 
 int main(int argc, char* argv[]){
     md = fopen("sampleThree.md", "r");
-    html = fopen("sampleThree.html", "w");
+    out = fopen("sampleThree.tokens", "w");
 
     char* line = malloc(SIZE);
 
@@ -66,12 +85,13 @@ int main(int argc, char* argv[]){
         lineCount++;
     }
 
-    addToken(END, NULL);
+    addToken(newToken(TEXT, NULL));
+    addToken(newToken(END, NULL));
 
+    fwrite("START: ", 7, 1, out);
     returnTokens();
 
     free(tokens);
-    fclose(html);
-    fclose(md);
+    fclose(out);
     return 0;
 }

@@ -4,54 +4,10 @@
 #include <string.h>
 #include <ctype.h>
 
+/* DEFINITION START */
+
 #define SIZE 1024
-#define TYPES 21
-
-typedef enum {
-    START = 0,
-    PROPERTIES,
-    HEADING,
-    LIST,
-    OLIST,
-    TASKLIST,
-    BLOCKQUOTE,
-    CODEBLOCK_FENCED,
-    CODEBLOCK_INLINE,
-    BOLD,
-    ITALIC,
-    STRIKETHROUGH,
-    HIGHLIGHT,
-    FOOTNOTE,
-    FOOTNOTE_INLINE,
-    MEDIA,
-    INDENT,
-    LINEBREAK,
-    TEXT,
-    ENDLINE,
-    END,
-} TokenType;
-
-char* translate[TYPES] = {"START",
-                          "PROPERTIES", 
-                          "HEADING",
-                          "LIST", 
-                          "OLIST",
-                          "TASKLIST",
-                          "BLOCKQUOTE",
-                          "CODEBLOCK_FENCED",
-                          "CODEBLOCK_INLINE",
-                          "BOLD",
-                          "ITALIC",
-                          "STRIKETHROUGH",
-                          "HIGHLIGHT",
-                          "FOOTNOTE",
-                          "FOOTNOTE_INLINE",
-                          "MEDIA",
-                          "INDENT",
-                          "LINEBREAK", 
-                          "TEXT", 
-                          "ENDLINE", 
-                          "END"};
+#define TYPES 14
 
 typedef struct tk{
     int tokenType;
@@ -60,83 +16,115 @@ typedef struct tk{
     struct tk* left;
 } Token;
 
-Token* tokens;
-Token* currentToken;
-int bufferSize;
-int footnoteCount = 1;
-int footnoteClosed = -1;
-int footnoteInline = 1;
-char* buffer = "";
+/* DEFINITION END */
+/* GLOBAL VARIABLE START */
 
-Token* refs[TYPES];
+typedef enum {
+    START = 0,
+    END,
+    PROPERTIES,
+    HEADING,
+    BLOCKQUOTE,
+    ORDERED_LIST,
+    UNORDERED_LIST,
+    TASK_LIST,
+    CODEBLOCK,
+    LINEBREAK,
+    FOOTNOTE,
+    FOOTNOTE_INLINE,
+    MEDIA,
+    TEXT,
+} TokenType;
+
+char* translate[TYPES] = {"START",
+                          "END",
+                          "PROPERTIES",
+                          "HEADING",
+                          "BLOCKQUOTE",
+                          "ORDERED_LIST",
+                          "UNORDERED_LIST",
+                          "TASK_LIST",
+                          "CODELBOCK",
+                          "LINEBREAK",
+                          "FOOTNOTE",
+                          "FOOTNOTE_INLINE",
+                          "MEDIA",
+                          "TEXT"};
+
+Token* tokens; /* Points to head of Token Tree */
+Token* currentToken; /* Points to current token in tree to be modified */
+
+int footnoteCount = 1; /* total count of written footnotes */
+int footnoteClosed = -1; /* total count of closed footnotes */
+int footnoteInline = 1; /* total count of inline footnotes */
+
+int bufferSize; /* stored length of text buffer */
+char* buffer = ""; /* text buffer */
+
+// debatable usage here
+Token* refs[TYPES]; 
 bool flags[TYPES] = {false};
 
-bool left(){
-    for(int i = 0; i < TYPES; i++){
-        if(flags[i] == true){
-            return true;
-        }
-    }
-    return false;
-}
+/* GLOBAL VARIABLE END */
+/* DEFINE TOKENIZATION FUNCTIONS */
 
-Token* addToken(int type, char* val){
-    Token* token = malloc(sizeof(Token));
+/**
+ * Creates a new Token dependent on Type and Val arguments
+**/
+Token* newToken(int type, char* val){ 
+    Token* new = malloc(sizeof(Token));
+    
+    new->value = "";
 
-    token->tokenType = type;
-
-    if(type == TEXT){
-        if(val == NULL){
+    if(val == NULL && type == TEXT){
+        if(bufferSize > 0){
             buffer[bufferSize] = '\0';
-            token->value = malloc(bufferSize);
-            token->value = buffer;
-
-            bufferSize = 0;
-            buffer = malloc(SIZE);
-        }
-        else{
-            token->value = malloc(sizeof(val));
-            token->value = val;
+            new->value = buffer;
         }
     }
     else
-    if(val == NULL){
-        token->value = "";
-    }
-    else{
-        token->value = val;
+    if(val != NULL){
+        new->value = val;
     }
     
-    token->right = NULL;
-    token->left = NULL;
+    new->right = NULL;
+    new->left = NULL;
 
-    return token;
+    return new;
 }
 
-void inlineToken(int type){
-    if(left() && bufferSize > 0){
-        currentToken->left = addToken(TEXT, NULL);
-        currentToken = currentToken->left;
-    }
-    else if(bufferSize > 0){
-        currentToken->right = addToken(TEXT, NULL);
-        currentToken = currentToken->right;
-    }
-    
-    if(flags[type]){
-        currentToken = refs[type];
-        flags[type] = false;
+/**
+ * Adds a new token to the Token tree, depending on the Token's type
+**/
+void addToken(Token* token){
+    char* type = token->tokenType;
+    int   val  = token->value;
+
+    if(type == TEXT){
+        if(currentToken->left == NULL){
+            currentToken->left = token;
+            currentToken = currentToken->left;
+        }
+        else{
+            fprintf(stderr, "left token already full\n");
+        }
     }
     else{
-        currentToken->left = addToken(type, NULL);
-        currentToken = currentToken->left;
-
-        flags[type] = true;
-        refs[type] = currentToken;
+        if(currentToken->right == NULL){
+            currentToken->right = token;
+            currentToken = currentToken->right;
+        }
+        else{
+            fprintf(stderr, "right token already full\n");
+        }
     }
+
     return;
 }
 
+/**
+ * Converts an integer to a string
+**/
 char* intToStr(int i){
     int len = sprintf(NULL, "%d", i);
     char* str = malloc(len + 1);
@@ -145,6 +133,9 @@ char* intToStr(int i){
     return str;
 }
 
+/**
+ * Counts the number of occurences of `search` on string `str`
+**/
 int countChars(char* str, char search, char* ch){
     int count = 0;
     while(*ch == search){
@@ -156,13 +147,12 @@ int countChars(char* str, char search, char* ch){
     return count;
 }
 
+/**
+ * Iteratively turns a single line from a .MD file into Tokens which are added to the existing tree
+**/
 void tokenize(char* line, int lineCount){
     if(tokens == NULL){
-        tokens = malloc(sizeof(Token));
-        tokens->tokenType = 0;
-        tokens->value = NULL;
-        tokens->right = NULL;
-        tokens->left = NULL;
+        tokens = newToken(START, NULL);
 
         currentToken = tokens;
     }
@@ -174,33 +164,7 @@ void tokenize(char* line, int lineCount){
     for(ch = line; *ch != '\0'; ch++){
         //ENDLINES
         if(*ch == '\n' || *ch == '\r'){
-            if(bufferSize == 0){
-                break;
-            }
-            if(flags[TASKLIST]){
-                flags[TASKLIST] = false;
-                currentToken = refs[TASKLIST];
-
-                currentToken->right = addToken(TEXT, NULL);
-                currentToken = currentToken->right;
-                break;
-            }
-            if(flags[LIST]){
-                flags[LIST] = false;
-                currentToken = refs[LIST];
-
-                currentToken->right = addToken(TEXT, NULL);
-                currentToken = currentToken->right;
-                break;
-            }
-            if(left()){
-                //flags[TASKLIST] = false;
-                currentToken->left = addToken(TEXT, NULL);
-                currentToken = currentToken->left;
-                break;
-            }
-            currentToken->right = addToken(TEXT, NULL);
-            currentToken = currentToken->right;
+            //durr
             break;
         }
 
@@ -215,232 +179,231 @@ void tokenize(char* line, int lineCount){
         }
 
         //FOOTNOTES & LINKS
-        if(*ch == '['){
-            if(*(ch + 1) == '^'){
-                while(*(ch + counter + 2) != ']'){
-                    counter++;
-                }
-                if(*(ch + counter + 3) == ':'){
-                    currentToken->right = addToken(FOOTNOTE, intToStr(footnoteClosed));
-                    currentToken = currentToken->right;
-                    footnoteClosed--;
-                    ch += counter + 3;
-                    continue;
-                }
-                else
-                {
-                    currentToken->right = addToken(FOOTNOTE, intToStr(footnoteCount));
-                    currentToken = currentToken->right;
-                    footnoteCount++;
-                    ch += counter + 2;
-                    continue;
-                }
-            }
-            currentToken->right = addToken(MEDIA, NULL);
-            currentToken = currentToken->right;
-            Token* refPoint = currentToken;
+        // if(*ch == '['){
+        //     if(*(ch + 1) == '^'){
+        //         while(*(ch + counter + 2) != ']'){
+        //             counter++;
+        //         }
+        //         if(*(ch + counter + 3) == ':'){
+        //             currentToken->right = addToken(FOOTNOTE, intToStr(footnoteClosed));
+        //             currentToken = currentToken->right;
+        //             footnoteClosed--;
+        //             ch += counter + 3;
+        //             continue;
+        //         }
+        //         else
+        //         {
+        //             currentToken->right = addToken(FOOTNOTE, intToStr(footnoteCount));
+        //             currentToken = currentToken->right;
+        //             footnoteCount++;
+        //             ch += counter + 2;
+        //             continue;
+        //         }
+        //     }
+        //     currentToken->right = addToken(MEDIA, NULL);
+        //     currentToken = currentToken->right;
+        //     Token* refPoint = currentToken;
 
-            ch++;
-            while(*ch != ']'){
-                buffer[bufferSize] = *ch;
-                ch++;
-                bufferSize++;
-            }
-            ch++;
+        //     ch++;
+        //     while(*ch != ']'){
+        //         buffer[bufferSize] = *ch;
+        //         ch++;
+        //         bufferSize++;
+        //     }
+        //     ch++;
 
-            currentToken->left = addToken(TEXT, NULL);
-            currentToken = currentToken->left;
+        //     currentToken->left = addToken(TEXT, NULL);
+        //     currentToken = currentToken->left;
 
-            bufferSize = 0;
-            buffer = malloc(SIZE);
+        //     bufferSize = 0;
+        //     buffer = malloc(SIZE);
 
-            if(*ch == '('){
-                ch++;
-                while(*ch != ')'){
-                    buffer[bufferSize] = *ch;
-                    ch++;
-                    bufferSize++;
-                }
-                ch++;
+        //     if(*ch == '('){
+        //         ch++;
+        //         while(*ch != ')'){
+        //             buffer[bufferSize] = *ch;
+        //             ch++;
+        //             bufferSize++;
+        //         }
+        //         ch++;
 
-                currentToken->left = addToken(TEXT, NULL);
-                continue;
-            }
-            else{
-                //improper link format or i need to reconsider this code
-                fprintf(stderr, "Media block started and not properly finished on line %d\n", lineCount);
-                //exit(EXIT_FAILURE);
-            }
-        }
+        //         currentToken->left = addToken(TEXT, NULL);
+        //         continue;
+        //     }
+        //     else{
+        //         //improper link format or i need to reconsider this code
+        //         fprintf(stderr, "Media block started and not properly finished on line %d\n", lineCount);
+        //         //exit(EXIT_FAILURE);
+        //     }
+        // }
 
         //INLINE FOOTNOTE
-        if(*ch == '^'){
-            if(*(ch + 1) == '['){
-                currentToken->left = addToken(TEXT, NULL);
-                currentToken = currentToken->left;
-                currentToken->right = addToken(FOOTNOTE_INLINE, NULL);
-                currentToken = currentToken->right;
+        // if(*ch == '^'){
+        //     if(*(ch + 1) == '['){
+        //         currentToken->left = addToken(TEXT, NULL);
+        //         currentToken = currentToken->left;
+        //         currentToken->right = addToken(FOOTNOTE_INLINE, NULL);
+        //         currentToken = currentToken->right;
 
-                ch += 2;
-                while(*ch != ']'){
-                    if(*ch == '\\'){
-                        ch++;
-                        continue;
-                    }
-                    buffer[bufferSize] = *ch;
-                    ch++;
-                    bufferSize++;
-                }
+        //         ch += 2;
+        //         while(*ch != ']'){
+        //             if(*ch == '\\'){
+        //                 ch++;
+        //                 continue;
+        //             }
+        //             buffer[bufferSize] = *ch;
+        //             ch++;
+        //             bufferSize++;
+        //         }
 
-                currentToken->left = addToken(TEXT, NULL);
-                currentToken = currentToken->left;
-                continue;
-            }
-        }
-        
+        //         currentToken->left = addToken(TEXT, NULL);
+        //         currentToken = currentToken->left;
+        //         continue;
+        //     }
+        // }
 
         //HORIZONTAL RULE & PROPERTIES
-        if(bufferSize == 0){
-            int index = 0;
-            if(*ch == '*' || *ch == ' '){
-                while(*(ch + index) == '*' || *(ch + index) == ' '){
-                    if(*(ch + index) == '*'){
-                        counter++;
-                    }
-                    index++;
-                }
-            }
-            else
-            if(*ch == '_' || *ch == ' '){
-                while(*(ch + index) == '_' || *(ch + index) == ' '){
-                    if(*(ch + index) == '_'){
-                        counter++;
-                    }
-                    index++;
-                }
-            }
-            else
-            if(*ch == '-' || *ch == ' '){
-                while(*(ch + index) == '-' || *(ch + index) == ' '){
-                    if(*(ch + index) == '-'){
-                        counter++;
-                    }
-                    index++;
-                }
-                if(counter == index && counter == 3 && (lineCount == 1 || flags[PROPERTIES] == true)){
-                    inlineToken(PROPERTIES);
-                    ch += 3;
-                    continue;
-                }
-            }
-            if(counter >= 3){
-                currentToken->right = addToken(LINEBREAK, NULL);
-                currentToken = currentToken->right;
-                ch += index;
-                continue;
-            }
-        }
-
+        // if(bufferSize == 0){
+        //     int index = 0;
+        //     if(*ch == '*' || *ch == ' '){
+        //         while(*(ch + index) == '*' || *(ch + index) == ' '){
+        //             if(*(ch + index) == '*'){
+        //                 counter++;
+        //             }
+        //             index++;
+        //         }
+        //     }
+        //     else
+        //     if(*ch == '_' || *ch == ' '){
+        //         while(*(ch + index) == '_' || *(ch + index) == ' '){
+        //             if(*(ch + index) == '_'){
+        //                 counter++;
+        //             }
+        //             index++;
+        //         }
+        //     }
+        //     else
+        //     if(*ch == '-' || *ch == ' '){
+        //         while(*(ch + index) == '-' || *(ch + index) == ' '){
+        //             if(*(ch + index) == '-'){
+        //                 counter++;
+        //             }
+        //             index++;
+        //         }
+        //         if(counter == index && counter == 3 && (lineCount == 1 || flags[PROPERTIES] == true)){
+        //             inlineToken(PROPERTIES);
+        //             ch += 3;
+        //             continue;
+        //         }
+        //     }
+        //     if(counter >= 3){
+        //         currentToken->right = addToken(LINEBREAK, NULL);
+        //         currentToken = currentToken->right;
+        //         ch += index;
+        //         continue;
+        //     }
+        // }
 
         //STRIKETHROUGH
-        if(*ch == '~' && *(ch + 1) == '~'){
-            inlineToken(STRIKETHROUGH);
-            ch++;
-            continue;
-        }
+        // if(*ch == '~' && *(ch + 1) == '~'){
+        //     inlineToken(STRIKETHROUGH);
+        //     ch++;
+        //     continue;
+        // }
 
-        //HIGHLIGHT
-        if(*ch == '=' && *(ch + 1) == '='){
-            inlineToken(HIGHLIGHT);
-            ch++;
-            continue;
-        }
-
+        // //HIGHLIGHT
+        // if(*ch == '=' && *(ch + 1) == '='){
+        //     inlineToken(HIGHLIGHT);
+        //     ch++;
+        //     continue;
+        // }
 
         //BOLD & ITALICS
-        if(*ch == '_' || *ch == '*'){
-            char* countUnderscore = malloc(1);
-            int underscoreCount = countChars(countUnderscore, '_', ch);
-            int starCount = countChars(countUnderscore, '*', ch);
-            //ITALICS
-            if(underscoreCount == 1 || starCount == 1){
-                //addToken(ITALIC, NULL);
-                inlineToken(ITALIC);
-            }
-            else
-            //BOLD
-            if(underscoreCount == 2 || starCount == 2){
-                //addToken(BOLD, NULL);
-                inlineToken(BOLD);
-                ch++;
-            }
-            continue;
-        }
+        // if(*ch == '_' || *ch == '*'){
+        //     char* countUnderscore = malloc(1);
+        //     int underscoreCount = countChars(countUnderscore, '_', ch);
+        //     int starCount = countChars(countUnderscore, '*', ch);
+        //     //ITALICS
+        //     if(underscoreCount == 1 || starCount == 1){
+        //         //addToken(ITALIC, NULL);
+        //         inlineToken(ITALIC);
+        //     }
+        //     else
+        //     //BOLD
+        //     if(underscoreCount == 2 || starCount == 2){
+        //         //addToken(BOLD, NULL);
+        //         inlineToken(BOLD);
+        //         ch++;
+        //     }
+        //     continue;
+        // }
 
         //UNORDERED/TASK LISTS
-        if(*ch == '-'){
-            if(*(ch + 1) == ' '){
-                if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
-                    char* val = "1";
-                    if(*(ch + 3) != ' '){
-                        val = "0";
-                    }
+        // if(*ch == '-'){
+        //     if(*(ch + 1) == ' '){
+        //         if(*(ch + 2) == '[' && *(ch + 4) == ']' && *(ch + 5) == ' '){
+        //             char* val = "1";
+        //             if(*(ch + 3) != ' '){
+        //                 val = "0";
+        //             }
+        //             currentToken->right = addToken(TASKLIST, val);
+        //             currentToken = currentToken->right;
 
-                    currentToken->right = addToken(TASKLIST, val);
-                    currentToken = currentToken->right;
+        //             flags[TASKLIST] = true;
+        //             refs[TASKLIST] = currentToken;
 
-                    flags[TASKLIST] = true;
-                    refs[TASKLIST] = currentToken;
-
-                    ch += 5;
-                }
-                else{
-                    currentToken->right = addToken(LIST, NULL);
-                    currentToken = currentToken->right;
+        //             ch += 5;
+        //         }
+        //         else{
+        //             currentToken->right = addToken(LIST, NULL);
+        //             currentToken = currentToken->right;
                     
-                    flags[LIST] = true;
-                    refs[LIST] = currentToken;
+        //             flags[LIST] = true;
+        //             refs[LIST] = currentToken;
                     
-                    ch ++;
-                }
-                continue;
-            }
-        }
+        //             ch++;
+        //         }
+        //         continue;
+        //     }
+        // }
 
         //FENCED & INLINE CODEBLOCKS
-        if(*ch == '`'){
-            char* backtickCount = malloc(1);
-            counter = countChars(backtickCount, '`', ch);
-            if(counter >= 3){
-                // currentToken->right = addToken(CODEBLOCK_FENCED, NULL);
-                // currentToken = currentToken->right;
+        // if(*ch == '`'){
+        //     char* backtickCount = malloc(1);
+        //     counter = countChars(backtickCount, '`', ch);
+        //     if(counter >= 3){
+        //         // currentToken->right = addToken(CODEBLOCK_FENCED, NULL);
+        //         // currentToken = currentToken->right;
                 
-                inlineToken(CODEBLOCK_FENCED);
+        //         inlineToken(CODEBLOCK_FENCED);
                 
-                ch += 2;
-            }
-            else
-            if(counter < 3){
-                inlineToken(CODEBLOCK_INLINE);
+        //         ch += 2;
+        //     }
+        //     else
+        //     if(counter < 3){
+        //         inlineToken(CODEBLOCK_INLINE);
 
-                ch += counter - 1;
-            }
-            while(*ch != '`'){
-                buffer[bufferSize] = *ch;
-                ch++;
-                bufferSize++;
-            }
-            if(strlen(buffer) > 0){
-                buffer[bufferSize] = '\0';
-            }
-            continue;
-        }
+        //         ch += counter - 1;
+        //     }
+        //     while(*ch != '`'){
+        //         buffer[bufferSize] = *ch;
+        //         ch++;
+        //         bufferSize++;
+        //     }
+        //     if(strlen(buffer) > 0){
+        //         buffer[bufferSize] = '\0';
+        //     }
+        //     continue;
+        // }
 
         //INDENT
         // if(*ch == '\t'){
         //     char* indentCount = malloc(1);
         //     countChars(indentCount, '\t', ch);
-        //     addToken(INDENT, indentCount);
+
+        //     currentToken->right = addToken(INDENT, indentCount);
+        //     currentToken = currentToken->right;
+
         //     continue;
         // }
         // if(*ch == ' '){
@@ -448,7 +411,10 @@ void tokenize(char* line, int lineCount){
         //     int spaces = countChars(spaceCount, ' ', ch);
         //     if(spaces % 4 == 0){
         //         sprintf(spaceCount, "%d", spaces / 4);
-        //         addToken(INDENT, spaceCount);
+
+        //         currentToken->right = addToken(INDENT, spaceCount);
+        //         currentToken = currentToken->right;
+
         //         ch += spaces - 1;
         //         continue;
         //     }
@@ -458,7 +424,13 @@ void tokenize(char* line, int lineCount){
         // if(*ch == '>'){
         //     char* quoteCount = malloc(1);
         //     counter = countChars(quoteCount, '>', ch);
-        //     addToken(BLOCKQUOTE, quoteCount);
+
+        //     currentToken->right = addToken(BLOCKQUOTE, quoteCount);
+        //     currentToken = currentToken->right;
+
+        //     flags[BLOCKQUOTE] = true;
+        //     refs[BLOCKQUOTE] = currentToken;
+            
         //     ch += counter - 1;
         //     continue;
         // }
@@ -468,11 +440,17 @@ void tokenize(char* line, int lineCount){
         //     char* headingCount = malloc(1);
         //     counter = countChars(headingCount, '#', ch);
         //     if(*(ch + counter) == ' '){
-        //         addToken(HEADING, headingCount);
+        //         currentToken->right = addToken(HEADING, headingCount);
+        //         currentToken = currentToken->right;
+
+        //         flags[HEADING] = true;
+        //         refs[HEADING] = currentToken;
+
         //         ch += counter;
         //         continue;
         //     }
         // }
+
         // //ORDERED LIST
         // if(isdigit(*ch)){
         //     if(*(ch + 1) == '.' && *(ch + 2) == ' '){
