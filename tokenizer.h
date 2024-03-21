@@ -185,6 +185,14 @@ void tokenize(char* line, int lineCount){
                 currentToken = currentToken->right;
                 break;
             }
+            if(flags[LIST]){
+                flags[LIST] = false;
+                currentToken = refs[LIST];
+
+                currentToken->right = addToken(TEXT, NULL);
+                currentToken = currentToken->right;
+                break;
+            }
             if(left()){
                 //flags[TASKLIST] = false;
                 currentToken->left = addToken(TEXT, NULL);
@@ -387,38 +395,46 @@ void tokenize(char* line, int lineCount){
                     ch += 5;
                 }
                 else{
-                    // currentToken->right = addToken(LIST, NULL);
-                    // currentToken = currentToken->right;
-                    // ch ++;
+                    currentToken->right = addToken(LIST, NULL);
+                    currentToken = currentToken->right;
+                    
+                    flags[LIST] = true;
+                    refs[LIST] = currentToken;
+                    
+                    ch ++;
                 }
                 continue;
             }
         }
 
         //FENCED & INLINE CODEBLOCKS
-        // if(*ch == '`'){
-        //     char* backtickCount = malloc(1);
-        //     counter = countChars(backtickCount, '`', ch);
-        //     if(counter >= 3){
-        //         addToken(CODEBLOCK_FENCED, NULL);
-        //         ch += 2;
-        //     }
-        //     else
-        //     if(counter < 3){
-        //         addToken(CODEBLOCK_INLINE, NULL);
-        //         ch += counter - 1;
+        if(*ch == '`'){
+            char* backtickCount = malloc(1);
+            counter = countChars(backtickCount, '`', ch);
+            if(counter >= 3){
+                // currentToken->right = addToken(CODEBLOCK_FENCED, NULL);
+                // currentToken = currentToken->right;
                 
-        //     }
-        //     while(*ch != '`'){
-        //         buffer[bufferSize] = *ch;
-        //         ch++;
-        //         bufferSize++;
-        //     }
-        //     if(strlen(buffer) > 0){
-        //         buffer[bufferSize] = '\0';
-        //     }
-        //     continue;
-        // }
+                inlineToken(CODEBLOCK_FENCED);
+                
+                ch += 2;
+            }
+            else
+            if(counter < 3){
+                inlineToken(CODEBLOCK_INLINE);
+
+                ch += counter - 1;
+            }
+            while(*ch != '`'){
+                buffer[bufferSize] = *ch;
+                ch++;
+                bufferSize++;
+            }
+            if(strlen(buffer) > 0){
+                buffer[bufferSize] = '\0';
+            }
+            continue;
+        }
 
         //INDENT
         // if(*ch == '\t'){
